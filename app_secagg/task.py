@@ -1,0 +1,186 @@
+"""
+Task definitions for Flower SecAgg+ app: model, data, train, test.
+Uses PIDL loss and ResNet-18 from this project.
+"""
+
+import sys
+from pathlib import Path
+
+# Ensure project root is on path when running via flwr run
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+from collections import OrderedDict
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
+
+from models.resnet_pidl import ResNet18FeatureExtractor
+from losses.pidl_loss import PIDLLoss
+from data.dataset_utils import create_fl_data_loaders
+
+
+# Cache for partitioned data (keyed by data_root, num_partitions, ...)
+_data_cache = None
+
+
+def make_net(num_classes=4, pretrained=True, seed=42):
+    """Build ResNet-18 PIDL model."""
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    return ResNet18FeatureExtractor(num_classes=num_classes, pretrained=pretrained)
+
+
+def get_weights(net):
+    """Extract model parameters as list of numpy arrays."""
+    return [val.cpu().numpy() for _, val in net.state_dict().items()]
+
+
+def set_weights(net, parameters):
+    """Load model parameters from list of numpy arrays."""
+    params_dict = zip(net.state_dict().keys(), parameters)
+    state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
+    net.load_state_dict(state_dict, strict=True)
+
+
+def load_data(
+    partition_id: int,
+    num_partitions: int,
+    data_root: str,
+    batch_size: int = 32,
+    image_size: int = 224,
+    augment: bool = True,
+    test_split: float = 0.15,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+    random_state: int = 42,
+):
+    """
+    Load train/val loaders for the given partition.
+    Uses stratified brain-tumor FL partitioning; test set is reused as val for client-side eval.
+    """
+    global _data_cache
+    cache_key = (data_root, num_partitions, test_split, random_state)
+    if _data_cache is None or _data_cache.get("key") != cache_key:
+        client_loaders, test_loader, num_classes, _ = create_fl_data_loaders(
+            data_root=data_root,
+            num_clients=num_partitions,
+            test_split=test_split,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            image_size=image_size,
+            augment=augment,
+            random_state=random_state,
+        )
+        _data_cache = {
+            "key": cache_key,
+            "client_loaders": client_loaders,
+            "test_loader": test_loader,
+            "num_classes": num_classes,
+        }
+    if partition_id >= len(_data_cache["client_loaders"]):
+        raise ValueError(
+            f"partition_id {partition_id} >= num_partitions {num_partitions}"
+        )
+    train_loader = _data_cache["client_loaders"][partition_id]
+    val_loader = _data_cache["test_loader"]
+    num_classes = _data_cache["num_classes"]
+    return train_loader, val_loader, num_classes
+
+
+def get_global_test_loader(
+    data_root: str,
+    batch_size: int = 32,
+    test_split: float = 0.15,
+    num_clients: int = 3,
+    image_size: int = 224,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+    random_state: int = 42,
+):
+    """Return (test_loader, num_classes) for server-side global evaluation."""
+    _, test_loader, num_classes, _ = create_fl_data_loaders(
+        data_root=data_root,
+        num_clients=num_clients,
+        test_split=test_split,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        image_size=image_size,
+        augment=False,
+        random_state=random_state,
+    )
+    return test_loader, num_classes
+
+
+def train(
+    net,
+    trainloader,
+    valloader,
+    epochs,
+    learning_rate,
+    device,
+    num_classes=4,
+    regularizer_type="perona_malik",
+    lambda_pm=0.1,
+    k=1.0,
+    feature_layer="layer2",
+):
+    """Train model with PIDL loss. Returns metrics dict."""
+    net.to(device)
+    loss_fn = PIDLLoss(
+        regularizer_type=regularizer_type,
+        k=k,
+        lambda_pm=lambda_pm,
+        num_classes=num_classes,
+    ).to(device)
+    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate, weight_decay=1e-4)
+    net.train()
+    for _ in range(epochs):
+        for images, labels in trainloader:
+            images, labels = images.to(device), labels.to(device)
+            logits, feature_maps = net(images, return_features=True)
+            feat = feature_maps[feature_layer]
+            total_loss, _, _ = loss_fn(logits, labels, feat)
+            optimizer.zero_grad()
+            total_loss.backward()
+            optimizer.step()
+    loss, acc = test(net, valloader, device, num_classes, regularizer_type, lambda_pm, k, feature_layer)
+    return {"val_loss": loss, "accuracy": acc}
+
+
+def test(
+    net,
+    testloader,
+    device,
+    num_classes=4,
+    regularizer_type="perona_malik",
+    lambda_pm=0.1,
+    k=1.0,
+    feature_layer="layer2",
+):
+    """Evaluate model; returns (loss, accuracy)."""
+    net.to(device)
+    loss_fn = PIDLLoss(
+        regularizer_type=regularizer_type,
+        k=k,
+        lambda_pm=lambda_pm,
+        num_classes=num_classes,
+    ).to(device)
+    net.eval()
+    correct, total, loss_sum = 0, 0, 0.0
+    with torch.no_grad():
+        for images, labels in testloader:
+            images, labels = images.to(device), labels.to(device)
+            logits, feature_maps = net(images, return_features=True)
+            feat = feature_maps[feature_layer]
+            l, _, _ = loss_fn(logits, labels, feat)
+            loss_sum += l.item() * labels.size(0)
+            _, pred = torch.max(logits.data, 1)
+            total += labels.size(0)
+            correct += (pred == labels).sum().item()
+    loss = loss_sum / total if total else 0.0
+    accuracy = correct / total if total else 0.0
+    return loss, accuracy

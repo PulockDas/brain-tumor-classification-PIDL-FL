@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brain-tumor-pidl-fl"
+version = "0.1.0"
+description = "Federated learning for brain tumor classification with PIDL and cryptographic secure aggregation"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=1.12.0",
+    "torchvision>=0.13.0",
+    "flwr[simulation]>=1.25.0",
+    "scikit-learn>=1.0.0",
+    "pandas>=1.3.0",
+    "matplotlib>=3.5.0",
+    "numpy>=1.21.0",
+    "Pillow>=8.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app_secagg*", "models*", "losses*", "data*", "federated*", "utils*", "configs*"]
+
+[tool.flwr.app]
+publisher = "brain-tumor-pidl-fl"
+
+[tool.flwr.app.components]
+serverapp = "app_secagg.server_app:app"
+clientapp = "app_secagg.client_app:app"
+
+[tool.flwr.app.config]
+# FL
+num-server-rounds = 5
+min-fit-clients = 3
+fraction-evaluate = 0.0
+local-epochs = 2
+learning-rate = 0.001
+batch-size = 32
+# Data (override in Colab)
+data-root = "/content/drive/MyDrive/PhysNet/datasets/brain_tumor_mri"
+log-dir = "/content/drive/MyDrive/PhysNet/results/fl_brain_mri"
+num-classes = 4
+# PIDL
+regularizer-type = "perona_malik"
+lambda-pm = 0.1
+k = 1.0
+feature-layer = "layer2"
+# SecAgg+ (real cryptographic secure aggregation)
+num-shares = 3
+reconstruction-threshold = 2
+max-weight = 1048575
+# Demo: if true, clients do not train (for quick protocol check)
+is-demo = false
+
+[tool.flwr.federations]
+default = "local-simulation"
+
+[tool.flwr.federations.local-simulation]
+options.num-supernodes = 3
