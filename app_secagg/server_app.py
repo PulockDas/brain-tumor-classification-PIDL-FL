@@ -2,6 +2,12 @@
 Flower ServerApp with real cryptographic Secure Aggregation (SecAgg+).
 Run via: flwr run .
 """
+import sys
+from pathlib import Path
+
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 from logging import DEBUG
 from typing import List, Tuple

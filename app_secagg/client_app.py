@@ -3,6 +3,12 @@ Flower ClientApp with real cryptographic Secure Aggregation (SecAgg+).
 Uses secaggplus_mod so client updates are masked before sending.
 Run via: flwr run .
 """
+import sys
+from pathlib import Path
+
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 import torch
 from flwr.client import ClientApp, NumPyClient
