@@ -36,6 +36,10 @@ def evaluate_model(
     Returns metrics including loss, accuracy, confusion matrix, F1, precision,
     recall, and inference time (seconds).
     """
+    # Ensure model and loss are on the same device as inputs
+    model.to(device)
+    if hasattr(loss_fn, "to"):
+        loss_fn = loss_fn.to(device)
     model.eval()
     total_loss = 0.0
     total_ce_loss = 0.0

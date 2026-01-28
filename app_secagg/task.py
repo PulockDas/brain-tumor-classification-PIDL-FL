@@ -42,8 +42,16 @@ def get_weights(net):
 
 def set_weights(net, parameters):
     """Load model parameters from list of numpy arrays."""
-    params_dict = zip(net.state_dict().keys(), parameters)
-    state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
+    # Match dtype/device of the existing model parameters/buffers to avoid
+    # CPU/GPU tensor mismatches during forward passes.
+    ref_state = net.state_dict()
+    params_dict = zip(ref_state.keys(), parameters)
+    state_dict = OrderedDict(
+        {
+            k: torch.as_tensor(v, dtype=ref_state[k].dtype, device=ref_state[k].device)
+            for k, v in params_dict
+        }
+    )
     net.load_state_dict(state_dict, strict=True)
 
 
@@ -203,6 +211,7 @@ def evaluate_global(
     feature_layer: str = "layer2",
 ) -> Dict[str, Any]:
     """Full evaluation (loss, accuracy, confusion matrix, F1, inference time)."""
+    net.to(device)
     loss_fn = PIDLLoss(
         regularizer_type=regularizer_type,
         k=k,
