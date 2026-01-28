@@ -84,7 +84,8 @@ class FedAvgWithLogging(FedAvg):
                 pin_memory=False,
             )
         if self._model is None:
-            self._model = make_net(num_classes=self._num_classes)
+            # Build server-side model once and place it on the chosen device.
+            self._model = make_net(num_classes=self._num_classes).to(self._device)
 
     def _write_round_headers_if_needed(self) -> None:
         if self._round_headers_written:
