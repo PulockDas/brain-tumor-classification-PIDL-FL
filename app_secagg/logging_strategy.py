@@ -166,6 +166,10 @@ class FedAvgWithLogging(FedAvg):
 
         if agg_params is not None:
             self._ensure_test_loader()
+            # Defensive: ensure server model is on the same device used for evaluation.
+            # This avoids CPU-weight vs CUDA-input mismatches if the model was created
+            # earlier (or deserialized) on a different device.
+            self._model.to(self._device)
             ndarrays = parameters_to_ndarrays(agg_params)
             set_weights(self._model, ndarrays)
             metrics = evaluate_global(
