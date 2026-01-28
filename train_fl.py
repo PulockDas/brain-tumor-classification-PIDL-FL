@@ -177,13 +177,15 @@ def main():
                     'accuracy': metrics.get('train_accuracy', 0.0),
                     'ce_loss': metrics.get('train_ce_loss', 0.0),
                     'reg_loss': metrics.get('train_reg_loss', 0.0),
-                    'num_samples': num_samples
+                    'num_samples': num_samples,
+                    'train_time_sec': metrics.get('train_time_sec', 0.0),
                 },
-                class_counts=class_counts
+                class_counts=class_counts,
             )
-            
+            t_s = metrics.get('train_time_sec', 0.0)
             print(f"  Client {cid} - Loss: {metrics.get('train_loss', 0.0):.4f}, "
-                  f"Acc: {metrics.get('train_accuracy', 0.0):.2f}%")
+                  f"Acc: {metrics.get('train_accuracy', 0.0):.2f}%, "
+                  f"train: {t_s:.1f}s")
         
         # Aggregate class-wise deltas and update global model
         if client_classwise_deltas_list and len(client_classwise_deltas_list) > 0:
@@ -236,21 +238,30 @@ def main():
         print("\nEvaluating global model on test set...")
         test_metrics = evaluate_model(
             global_model, test_loader, loss_fn, device,
-            feature_layer=config['feature_layer']
+            feature_layer=config['feature_layer'],
+            class_names=class_names,
+            num_classes=num_classes,
         )
-        
+        inf_s = test_metrics.get('inference_time_sec', 0.0)
+        f1 = test_metrics.get('f1_macro', 0.0)
         print(f"Test - Loss: {test_metrics['loss']:.4f}, "
               f"CE: {test_metrics['ce_loss']:.4f}, "
               f"Reg: {test_metrics['reg_loss']:.4f}, "
-              f"Acc: {test_metrics['accuracy']:.2f}%")
+              f"Acc: {test_metrics['accuracy']:.2f}%, "
+              f"F1(macro): {f1:.4f}, "
+              f"inference: {inf_s:.2f}s")
         
-        # Log round metrics
+        # Sum client training times for this round
+        training_time_sec = sum(
+            m.get('train_time_sec', 0.0) for _, _, _, m in client_results
+        )
         aggregation_time = time.time() - round_start_time
         logger.log_round(
             round_num=round_num,
             global_test_metrics=test_metrics,
             num_clients=len(clients),
-            aggregation_time=aggregation_time
+            aggregation_time=aggregation_time,
+            training_time_sec=training_time_sec,
         )
         
         # Save checkpoint
@@ -264,15 +275,19 @@ def main():
                 'test_metrics': test_metrics,
             }, checkpoint_path)
     
-    # Final summary
+    # Final summary and write fl_eval.json, fl_summary.json
     print(f"\n{'='*60}")
     print("Training completed!")
     print(f"{'='*60}")
-    summary = logger.get_summary()
+    summary = logger.finalize()
     print(f"Total rounds: {summary['num_rounds']}")
     print(f"Best test accuracy: {summary['best_test_acc']:.2f}%")
     print(f"Final test accuracy: {summary['final_test_acc']:.2f}%")
-    print(f"\nLogs saved to: {config['log_dir']}")
+    print(f"Best F1 (macro): {summary.get('best_f1_macro', 0):.4f}")
+    print(f"Total inference time: {summary.get('total_inference_time_sec', 0):.1f}s")
+    print(f"Total training time: {summary.get('total_training_time_sec', 0):.1f}s")
+    print(f"\nResults saved to: {config['log_dir']}")
+    print("  (fl_rounds.csv, fl_clients.csv, fl_eval.json, config.json, fl_summary.json)")
 
 
 if __name__ == '__main__':

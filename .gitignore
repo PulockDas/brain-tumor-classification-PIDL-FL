@@ -12,10 +12,18 @@ venv/
 
 # Data & outputs
 data/
-results/
 checkpoints/
 outputs/
 *.pth
+
+# Local results (use ./results or /content/results, not Drive). Commit only
+# the minimal result files you want on GitHub (see README):
+results/*
+!results/fl_rounds.csv
+!results/fl_clients.csv
+!results/fl_eval.json
+!results/config.json
+!results/fl_summary.json
 
 # IDE
 .idea/

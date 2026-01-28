@@ -3,6 +3,7 @@ Class-wise weight delta computation for federated learning.
 Tracks gradients separately for each class during training.
 """
 
+import time
 import torch
 import torch.nn as nn
 from collections import defaultdict
@@ -225,15 +226,16 @@ def compute_classwise_deltas_simple(model, train_loader, loss_fn, optimizer,
     # Track class distribution
     class_counts = defaultdict(int)
     total_samples = 0
-    
+
     # Training metrics
     total_loss_sum = 0.0
     ce_loss_sum = 0.0
     reg_loss_sum = 0.0
     correct = 0
-    
+
     # Train for num_epochs
     model.train()
+    t0 = time.perf_counter()
     for epoch in range(num_epochs):
         epoch_loss_sum = 0.0
         epoch_ce_sum = 0.0
@@ -278,7 +280,9 @@ def compute_classwise_deltas_simple(model, train_loader, loss_fn, optimizer,
         ce_loss_sum += epoch_ce_sum
         reg_loss_sum += epoch_reg_sum
         correct += epoch_correct
-    
+
+    train_time_sec = time.perf_counter() - t0
+
     # Get final weights
     final_weights = get_model_weights(model)
     
@@ -301,12 +305,12 @@ def compute_classwise_deltas_simple(model, train_loader, loss_fn, optimizer,
             ]
     
     # Compute metrics
-    num_batches = len(train_loader) * num_epochs
     training_metrics = {
         'loss': total_loss_sum / total_samples,
         'ce_loss': ce_loss_sum / total_samples,
         'reg_loss': reg_loss_sum / total_samples,
-        'accuracy': 100.0 * correct / total_samples
+        'accuracy': 100.0 * correct / total_samples,
+        'train_time_sec': train_time_sec,
     }
-    
+
     return class_deltas_dict, dict(class_counts), training_metrics

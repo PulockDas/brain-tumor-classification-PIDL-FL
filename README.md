@@ -43,7 +43,7 @@ Running **`notebooks/01_brain_mri_FL.ipynb`** in Google Colab is the main way to
 2. The notebook installs the project, runs `flwr run .` with SecAgg+, and writes `fl_rounds.csv` and `fl_clients.csv` under `log-dir`.
 3. The last cells plot global test accuracy, client accuracies, and losses from those CSVs.
 
-Set `DATA_ROOT` and `LOG_DIR` in the config cell to your Drive paths (e.g. `/content/drive/MyDrive/PhysNet/datasets/brain_tumor_mri` and `/content/drive/MyDrive/PhysNet/results/fl_brain_mri`).
+Set `DATA_ROOT` to your data path (e.g. `/content/drive/MyDrive/.../brain_tumor_mri`). Use **`LOG_DIR = "/content/results"`** (or `./results`) to avoid storing logs on Drive; copy the result files to the repo later if you want to commit them (see **Result files and GitHub** below).
 
 ### Local run with SecAgg+ (no Colab)
 
@@ -83,12 +83,15 @@ Key configuration parameters:
 
 ## Results and Logging
 
-When you run the notebook or `flwr run .` with the SecAgg+ app, the server writes under `log-dir` (e.g. `LOG_DIR` in the notebook):
+All runs write **minimal, plottable** result files under `log-dir` (e.g. `LOG_DIR` in the notebook or `--log-dir results`):
 
-- `fl_rounds.csv`: Round-level metrics (global test accuracy, test loss, num_clients)
-- `fl_clients.csv`: Client-level metrics (train_acc, train_loss, num_samples per client per round)
+| `fl_rounds.csv` | Per round: global test acc/loss, CE/reg loss, **inference_time_sec**, **training_time_sec**, **f1_macro**, **f1_micro**, **precision_macro**, **recall_macro**, num_clients, aggregation_time |
+| `fl_clients.csv` | Per client per round: train loss/acc, CE/reg loss, num_samples, **train_time_sec**, class_distribution |
+| `fl_eval.json` | Per-round **confusion matrices**, class names, F1/precision/recall, inference time (for plotting) |
+| `fl_summary.json` | Best/final test acc, best/final F1, total inference/training time, num_rounds, etc. |
+| `config.json` | Experiment configuration |
 
-The notebook’s last cells plot these. For `train_fl.py`, the same CSV layout is written under `--log-dir`.
+Use a **local** `log-dir` (e.g. `./results` or `/content/results` on Colab) to avoid filling Drive. Disable checkpoints via config (`save_checkpoints: false`) to save disk space. The notebook plots from these CSVs. **GitHub:** `.gitignore` excludes `results/*` except the five files above; add and commit only those to share results.
 
 ## Project Structure
 

@@ -40,11 +40,13 @@ def main(grid: Grid, context: Context) -> None:
 
     log_dir = str(run_config.get("log-dir", "results"))
     data_root = str(run_config.get("data-root", "/content/drive/MyDrive/PhysNet/datasets/brain_tumor_mri"))
+    config_dict = {k: v for k, v in run_config.items() if isinstance(v, (str, int, float, bool))}
 
     strategy = FedAvgWithLogging(
         log_dir=log_dir,
         data_root=data_root,
         num_classes=num_classes,
+        config=config_dict,
         regularizer_type=str(run_config.get("regularizer-type", "perona_malik")),
         lambda_pm=float(run_config.get("lambda-pm", 0.1)),
         k=float(run_config.get("k", 1.0)),

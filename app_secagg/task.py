@@ -4,7 +4,9 @@ Uses PIDL loss and ResNet-18 from this project.
 """
 
 import sys
+import time
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 # Ensure project root is on path when running via flwr run
 _project_root = Path(__file__).resolve().parent.parent
@@ -19,6 +21,7 @@ from torch.utils.data import DataLoader
 from models.resnet_pidl import ResNet18FeatureExtractor
 from losses.pidl_loss import PIDLLoss
 from data.dataset_utils import create_fl_data_loaders
+from federated.training_utils import evaluate_model
 
 
 # Cache for partitioned data (keyed by data_root, num_partitions, ...)
@@ -100,8 +103,8 @@ def get_global_test_loader(
     pin_memory: bool = False,
     random_state: int = 42,
 ):
-    """Return (test_loader, num_classes) for server-side global evaluation."""
-    _, test_loader, num_classes, _ = create_fl_data_loaders(
+    """Return (test_loader, num_classes, class_names) for server-side global evaluation."""
+    _, test_loader, num_classes, class_names = create_fl_data_loaders(
         data_root=data_root,
         num_clients=num_clients,
         test_split=test_split,
@@ -112,7 +115,7 @@ def get_global_test_loader(
         augment=False,
         random_state=random_state,
     )
-    return test_loader, num_classes
+    return test_loader, num_classes, class_names
 
 
 def train(
@@ -127,8 +130,8 @@ def train(
     lambda_pm=0.1,
     k=1.0,
     feature_layer="layer2",
-):
-    """Train model with PIDL loss. Returns metrics dict."""
+) -> Dict[str, Any]:
+    """Train model with PIDL loss. Returns metrics dict (val_loss, accuracy, train_time_sec)."""
     net.to(device)
     loss_fn = PIDLLoss(
         regularizer_type=regularizer_type,
@@ -138,6 +141,7 @@ def train(
     ).to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate, weight_decay=1e-4)
     net.train()
+    t0 = time.perf_counter()
     for _ in range(epochs):
         for images, labels in trainloader:
             images, labels = images.to(device), labels.to(device)
@@ -147,8 +151,9 @@ def train(
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
+    train_time_sec = time.perf_counter() - t0
     loss, acc = test(net, valloader, device, num_classes, regularizer_type, lambda_pm, k, feature_layer)
-    return {"val_loss": loss, "accuracy": acc}
+    return {"val_loss": loss, "accuracy": acc, "train_time_sec": train_time_sec}
 
 
 def test(
@@ -160,7 +165,7 @@ def test(
     lambda_pm=0.1,
     k=1.0,
     feature_layer="layer2",
-):
+) -> Tuple[float, float]:
     """Evaluate model; returns (loss, accuracy)."""
     net.to(device)
     loss_fn = PIDLLoss(
@@ -184,3 +189,32 @@ def test(
     loss = loss_sum / total if total else 0.0
     accuracy = correct / total if total else 0.0
     return loss, accuracy
+
+
+def evaluate_global(
+    net,
+    testloader,
+    device,
+    num_classes: int = 4,
+    class_names: Optional[List[str]] = None,
+    regularizer_type: str = "perona_malik",
+    lambda_pm: float = 0.1,
+    k: float = 1.0,
+    feature_layer: str = "layer2",
+) -> Dict[str, Any]:
+    """Full evaluation (loss, accuracy, confusion matrix, F1, inference time)."""
+    loss_fn = PIDLLoss(
+        regularizer_type=regularizer_type,
+        k=k,
+        lambda_pm=lambda_pm,
+        num_classes=num_classes,
+    ).to(device)
+    return evaluate_model(
+        net,
+        testloader,
+        loss_fn,
+        device,
+        feature_layer=feature_layer,
+        class_names=class_names,
+        num_classes=num_classes,
+    )
