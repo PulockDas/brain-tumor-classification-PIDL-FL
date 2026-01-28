@@ -10,8 +10,8 @@ venv/
 *.egg-info/
 *.egg
 
-# Data & outputs
-data/
+# Data & outputs (raw datasets live in DATA_ROOT, not in repo)
+# data/  — keep data/ package (dataset_utils) in repo
 checkpoints/
 outputs/
 *.pth
