@@ -17,15 +17,6 @@ outputs/
 *.pth
 !results/**/*.pth
 
-# Results directory: ignore everything except CSV, JSON, PTH files in subdirectories
-# Need to allow directories first, then allow specific file types
-results/*
-!results/**/
-!results/**/*.csv
-!results/**/*.json
-!results/**/*.pth
-
-
 # IDE
 .idea/
 .vscode/
