@@ -33,7 +33,7 @@ clientapp = "app_secagg.client_app:app"
 [tool.flwr.app.config]
 # FL
 num-server-rounds = 5
-min-fit-clients = 3
+min-fit-clients = 5
 fraction-evaluate = 0.0
 local-epochs = 2
 learning-rate = 0.001
@@ -58,4 +58,4 @@ is-demo = false
 default = "local-simulation"
 
 [tool.flwr.federations.local-simulation]
-options.num-supernodes = 3
+options.num-supernodes = 5

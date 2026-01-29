@@ -1,0 +1,11 @@
+{
+  "num_rounds": 10,
+  "num_clients": 3,
+  "best_test_acc": 100.0,
+  "final_test_acc": 99.93333333333334,
+  "final_test_loss": 0.0041680071235944,
+  "best_f1_macro": 1.0,
+  "final_f1_macro": 0.9993333330370368,
+  "total_inference_time_sec": 139.8234242860019,
+  "total_training_time_sec": 40469.086226672
+}

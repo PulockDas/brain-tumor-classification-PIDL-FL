@@ -1,0 +1,19 @@
+{
+  "num-server-rounds": 10,
+  "min-fit-clients": 3,
+  "fraction-evaluate": 0.0,
+  "local-epochs": 5,
+  "learning-rate": 0.001,
+  "batch-size": 32,
+  "data-root": "/content/drive/MyDrive/PhysNet/datasets/brain_tumor_mri",
+  "log-dir": "/content/results",
+  "num-classes": 4,
+  "regularizer-type": "perona_malik",
+  "lambda-pm": 0.1,
+  "k": 1.0,
+  "feature-layer": "layer2",
+  "num-shares": 3,
+  "reconstruction-threshold": 2,
+  "max-weight": 1048575,
+  "is-demo": false
+}
