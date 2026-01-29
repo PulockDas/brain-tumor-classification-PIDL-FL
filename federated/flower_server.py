@@ -11,7 +11,7 @@ import numpy as np
 
 from models.resnet_pidl import ResNet18FeatureExtractor
 from federated.classwise_deltas import (
-    get_model_weights, set_model_weights, combine_classwise_deltas
+    get_model_weights, set_model_weights
 )
 from federated.secure_aggregation import (
     SecureAggregator, aggregate_classwise_deltas, combine_classwise_deltas
