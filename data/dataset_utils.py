@@ -1,6 +1,13 @@
 """
-Data loading and stratified FL partitioning for the Brain Tumor MRI dataset.
-Expects: data_root/Training/{glioma,meningioma,no_tumor,pituitary}/
+Generic data loading and stratified FL partitioning for image classification datasets.
+
+By default it expects either:
+  - ``data_root/Training/<class_1>, <class_2>, ...``, or
+  - ``data_root/<class_1>, <class_2>, ...`` if no ``Training`` subfolder exists.
+
+This works for the original Brain Tumor MRI dataset, as well as other
+ImageFolder-style datasets such as the Kaggle lung/colon histopathology dataset
+(`lung-and-colon-cancer-histopathological-images`).
 """
 
 from pathlib import Path
@@ -91,10 +98,13 @@ def create_fl_data_loaders(
     root = Path(data_root)
     train_dir = root / "Training"
     if not train_dir.is_dir():
+        # Fall back to using the root itself (for datasets that do not use a
+        # "Training" subfolder, e.g. colon_image_sets or lung_image_sets).
         train_dir = root
     if not train_dir.is_dir():
         raise FileNotFoundError(
-            f"Data root must contain 'Training' with glioma, meningioma, no_tumor, pituitary. Not found: {train_dir}"
+            f"Data root must contain class subfolders either under 'Training' or directly under the given root. "
+            f"Checked: {root} and {root / 'Training'}"
         )
 
     train_tf, test_tf = _get_transforms(image_size, augment)

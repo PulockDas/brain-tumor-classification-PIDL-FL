@@ -11,6 +11,7 @@ def get_default_fl_config() -> Dict:
     return {
         # Data
         'data_root': '/content/drive/MyDrive/PhysNet/datasets/brain_tumor_mri',
+        'dataset_name': 'brain_tumor_mri',
         'num_clients': 3,
         'test_split': 0.15,
         'batch_size': 32,
@@ -44,10 +45,13 @@ def get_default_fl_config() -> Dict:
         # Secure Aggregation
         'use_secure_aggregation': True,
         
-        # Logging
+        # Logging / experiment structure
         'log_dir': 'results',
+        # Optional short tag to distinguish runs (e.g. "seed42" or "v1")
+        'experiment_tag': '',
         'save_checkpoints': True,
-        'checkpoint_dir': 'checkpoints',
+        # If left empty, will default to <log_dir>/<dataset_name>/<num_clients>_clients[/<experiment_tag>]/checkpoints
+        'checkpoint_dir': '',
         
         # Random seed
         'random_seed': 42,
@@ -62,6 +66,9 @@ def get_config_from_args() -> Dict:
     parser.add_argument('--data-root', type=str,
                         default='/content/drive/MyDrive/PhysNet/datasets/brain_tumor_mri',
                         help='Root directory containing Training folder')
+    parser.add_argument('--dataset-name', type=str,
+                        default='brain_tumor_mri',
+                        help='Short name for the dataset (e.g. brain_tumor_mri, colon_cancer, lung_cancer)')
     parser.add_argument('--num-clients', type=int, default=3,
                         help='Number of federated clients (default: 3)')
     parser.add_argument('--test-split', type=float, default=0.15,
@@ -100,9 +107,11 @@ def get_config_from_args() -> Dict:
     parser.add_argument('--dp-noise-fraction', type=float, default=0.15,
                         help='Fraction of parameters to add noise to (default: 0.15)')
     
-    # Logging
+    # Logging / experiment structure
     parser.add_argument('--log-dir', type=str, default='results',
-                        help='Directory for logs (default: results)')
+                        help='Base directory for logs (default: results)')
+    parser.add_argument('--experiment-tag', type=str, default='',
+                        help='Optional experiment tag to further separate runs')
     
     # Random seed
     parser.add_argument('--random-seed', type=int, default=42,
@@ -112,11 +121,14 @@ def get_config_from_args() -> Dict:
     
     # Convert to dict
     config = vars(args)
-    
-    # Add defaults for missing keys
+
+    # Add defaults for missing keys / keep backward compatibility
     default_config = get_default_fl_config()
     for key, value in default_config.items():
         if key not in config:
             config[key] = value
-    
+        elif config[key] is None:
+            # If an argument was provided but is None, fall back to default
+            config[key] = value
+
     return config

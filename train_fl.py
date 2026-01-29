@@ -32,11 +32,36 @@ def main():
     # Get configuration
     if args.config:
         import json
+        # Load user config and merge with defaults so new keys (like dataset_name)
+        # are always available without breaking older config files.
+        from configs.fl_config import get_default_fl_config
         with open(args.config, 'r') as f:
-            config = json.load(f)
+            user_config = json.load(f)
+        config = get_default_fl_config()
+        config.update(user_config)
     else:
         config = get_config_from_args()
-    
+
+    # Derive dataset- and client-specific log/checkpoint directories so that
+    # experiments for different datasets and client counts never mix.
+    import os
+    dataset_name = str(config.get('dataset_name', 'dataset'))
+    num_clients = int(config.get('num_clients', 0) or 0)
+    base_log_dir = str(config.get('log_dir', 'results'))
+    experiment_tag = str(config.get('experiment_tag', '') or '').strip()
+
+    log_path_parts = [base_log_dir, dataset_name]
+    if num_clients > 0:
+        log_path_parts.append(f"{num_clients}_clients")
+    if experiment_tag:
+        log_path_parts.append(experiment_tag)
+    resolved_log_dir = os.path.join(*log_path_parts)
+    config['log_dir'] = resolved_log_dir
+
+    # If checkpoint_dir is empty, keep it nested under the resolved log_dir
+    if not config.get('checkpoint_dir'):
+        config['checkpoint_dir'] = os.path.join(resolved_log_dir, 'checkpoints')
+
     # Set random seed
     torch.manual_seed(config['random_seed'])
     import numpy as np
@@ -69,7 +94,7 @@ def main():
     for i, loader in enumerate(client_loaders):
         print(f"  Client {i} training samples: {len(loader.dataset)}")
     
-    # Initialize logger
+    # Initialize logger (creates the dataset/client-specific log_dir)
     logger = FLLogger(log_dir=config['log_dir'])
     logger.save_config(config)
     
@@ -286,8 +311,15 @@ def main():
     print(f"Best F1 (macro): {summary.get('best_f1_macro', 0):.4f}")
     print(f"Total inference time: {summary.get('total_inference_time_sec', 0):.1f}s")
     print(f"Total training time: {summary.get('total_training_time_sec', 0):.1f}s")
+
+    # Save final global model weights so they can be reused for evaluation
+    # without retraining (e.g., when running from Colab).
+    final_model_path = os.path.join(config['log_dir'], 'final_model.pth')
+    torch.save(global_model.state_dict(), final_model_path)
+    print(f"\nFinal model weights saved to: {final_model_path}")
+
     print(f"\nResults saved to: {config['log_dir']}")
-    print("  (fl_rounds.csv, fl_clients.csv, fl_eval.json, config.json, fl_summary.json)")
+    print("  (fl_rounds.csv, fl_clients.csv, fl_eval.json, config.json, fl_summary.json, final_model.pth)")
 
 
 if __name__ == '__main__':
