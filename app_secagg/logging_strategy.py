@@ -47,6 +47,7 @@ class FedAvgWithLogging(FedAvg):
         k: float = 1.0,
         feature_layer: str = "layer2",
         config: Optional[Dict[str, Any]] = None,
+        num_rounds: Optional[int] = None,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -61,6 +62,7 @@ class FedAvgWithLogging(FedAvg):
         self._lambda_pm = lambda_pm
         self._k = k
         self._feature_layer = feature_layer
+        self._num_rounds = num_rounds
         self._test_loader = None
         self._class_names = None
         self._model = None
@@ -84,8 +86,12 @@ class FedAvgWithLogging(FedAvg):
                 pin_memory=False,
             )
         if self._model is None:
-            # Build server-side model once and place it on the chosen device.
-            self._model = make_net(num_classes=self._num_classes).to(self._device)
+            # Build server-side model once and place it on the chosen device immediately.
+            # This ensures all subsequent operations (set_weights, evaluate) use the correct device.
+            self._model = make_net(num_classes=self._num_classes)
+            self._model = self._model.to(self._device)
+            # Ensure model is in eval mode for evaluation
+            self._model.eval()
 
     def _write_round_headers_if_needed(self) -> None:
         if self._round_headers_written:
@@ -169,9 +175,12 @@ class FedAvgWithLogging(FedAvg):
             # Defensive: ensure server model is on the same device used for evaluation.
             # This avoids CPU-weight vs CUDA-input mismatches if the model was created
             # earlier (or deserialized) on a different device.
-            self._model.to(self._device)
+            self._model = self._model.to(self._device)
+            self._model.eval()  # Ensure eval mode for consistent behavior
             ndarrays = parameters_to_ndarrays(agg_params)
             set_weights(self._model, ndarrays)
+            # Double-check model is still on correct device after set_weights
+            self._model = self._model.to(self._device)
             metrics = evaluate_global(
                 self._model,
                 self._test_loader,
@@ -214,5 +223,11 @@ class FedAvgWithLogging(FedAvg):
                     metrics.get("recall_macro", 0.0),
                 ])
             self._write_eval_and_summary()
+            
+            # Save final model weights after last round
+            if self._num_rounds is not None and server_round == self._num_rounds:
+                final_model_path = self._log_dir / "final_model.pth"
+                torch.save(self._model.state_dict(), final_model_path)
+                print(f"Final model weights saved to: {final_model_path}")
 
         return agg_params, agg_metrics

@@ -45,10 +45,16 @@ def set_weights(net, parameters):
     # Match dtype/device of the existing model parameters/buffers to avoid
     # CPU/GPU tensor mismatches during forward passes.
     ref_state = net.state_dict()
+    # Get device from model (more reliable than individual params)
+    # If model has no parameters yet, default to CPU (will be moved later)
+    try:
+        model_device = next(net.parameters()).device
+    except StopIteration:
+        model_device = torch.device("cpu")
     params_dict = zip(ref_state.keys(), parameters)
     state_dict = OrderedDict(
         {
-            k: torch.as_tensor(v, dtype=ref_state[k].dtype, device=ref_state[k].device)
+            k: torch.as_tensor(v, dtype=ref_state[k].dtype, device=model_device)
             for k, v in params_dict
         }
     )
@@ -140,7 +146,9 @@ def train(
     feature_layer="layer2",
 ) -> Dict[str, Any]:
     """Train model with PIDL loss. Returns metrics dict (val_loss, accuracy, train_time_sec)."""
-    net.to(device)
+    # Ensure model is on the correct device before training
+    # This is critical to avoid device mismatches (CPU vs GPU)
+    net = net.to(device)
     loss_fn = PIDLLoss(
         regularizer_type=regularizer_type,
         k=k,
@@ -175,7 +183,9 @@ def test(
     feature_layer="layer2",
 ) -> Tuple[float, float]:
     """Evaluate model; returns (loss, accuracy)."""
-    net.to(device)
+    # Ensure model is on the correct device before evaluation
+    # This is critical to avoid device mismatches (CPU vs GPU)
+    net = net.to(device)
     loss_fn = PIDLLoss(
         regularizer_type=regularizer_type,
         k=k,
@@ -211,7 +221,9 @@ def evaluate_global(
     feature_layer: str = "layer2",
 ) -> Dict[str, Any]:
     """Full evaluation (loss, accuracy, confusion matrix, F1, inference time)."""
-    net.to(device)
+    # Ensure model is on the correct device before evaluation
+    # This is critical to avoid device mismatches (CPU vs GPU)
+    net = net.to(device)
     loss_fn = PIDLLoss(
         regularizer_type=regularizer_type,
         k=k,

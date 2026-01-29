@@ -50,6 +50,8 @@ class PIDLFlowerClient(NumPyClient):
         if self.net is None:
             from app_secagg.task import make_net
             self.net = make_net(num_classes=self.num_classes)
+            # Immediately move model to device to avoid device mismatches
+            self.net = self.net.to(self.device)
         return self.net
 
     def get_parameters(self, config):

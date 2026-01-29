@@ -48,6 +48,8 @@ def main(grid: Grid, context: Context) -> None:
     data_root = str(run_config.get("data-root", "/content/drive/MyDrive/PhysNet/datasets/brain_tumor_mri"))
     config_dict = {k: v for k, v in run_config.items() if isinstance(v, (str, int, float, bool))}
 
+    num_rounds = int(run_config.get("num-server-rounds", 5))
+    
     strategy = FedAvgWithLogging(
         log_dir=log_dir,
         data_root=data_root,
@@ -57,6 +59,7 @@ def main(grid: Grid, context: Context) -> None:
         lambda_pm=float(run_config.get("lambda-pm", 0.1)),
         k=float(run_config.get("k", 1.0)),
         feature_layer=str(run_config.get("feature-layer", "layer2")),
+        num_rounds=num_rounds,
         fraction_fit=1.0,
         min_fit_clients=int(run_config.get("min-fit-clients", 3)),
         fraction_evaluate=0.0 if is_demo else float(run_config.get("fraction-evaluate", 0.0)),
@@ -64,8 +67,6 @@ def main(grid: Grid, context: Context) -> None:
         initial_parameters=parameters,
         evaluate_metrics_aggregation_fn=weighted_average,
     )
-
-    num_rounds = int(run_config.get("num-server-rounds", 5))
     legacy_context = LegacyContext(
         context=context,
         config=ServerConfig(num_rounds=num_rounds),
