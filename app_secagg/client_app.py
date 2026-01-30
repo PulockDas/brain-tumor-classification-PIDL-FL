@@ -10,6 +10,7 @@ _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
+import numpy as np
 import torch
 from flwr.client import ClientApp, NumPyClient
 from flwr.client.mod import secaggplus_mod
@@ -33,6 +34,8 @@ class PIDLFlowerClient(NumPyClient):
         k,
         feature_layer,
         device,
+        dp_noise_fraction=0.0,
+        dp_noise_scale=0.01,
     ):
         self.trainloader = trainloader
         self.valloader = valloader
@@ -44,6 +47,8 @@ class PIDLFlowerClient(NumPyClient):
         self.k = k
         self.feature_layer = feature_layer
         self.device = device
+        self.dp_noise_fraction = dp_noise_fraction
+        self.dp_noise_scale = dp_noise_scale
         self.net = None  # created in fit to match server's make_net()
 
     def _get_net(self):
@@ -62,6 +67,9 @@ class PIDLFlowerClient(NumPyClient):
 
     def fit(self, parameters, config):
         self.set_parameters(parameters)
+        # Store initial weights for delta computation
+        initial_weights = get_weights(self._get_net())
+        
         net = self._get_net()
         results = train(
             net,
@@ -76,7 +84,60 @@ class PIDLFlowerClient(NumPyClient):
             k=self.k,
             feature_layer=self.feature_layer,
         )
-        return get_weights(net), len(self.trainloader.dataset), results
+        
+        # Get trained weights
+        trained_weights = get_weights(net)
+        
+        # Apply DP noise to weight deltas if enabled
+        if self.dp_noise_fraction > 0.0:
+            noisy_weights = self._apply_dp_noise_to_deltas(initial_weights, trained_weights)
+        else:
+            noisy_weights = trained_weights
+        
+        return noisy_weights, len(self.trainloader.dataset), results
+    
+    def _apply_dp_noise_to_deltas(self, initial_weights, trained_weights):
+        """
+        Apply differential privacy noise to weight deltas.
+        Adds Gaussian noise to a fraction of parameters in the weight deltas.
+        """
+        noisy_weights = []
+        rng = np.random.RandomState(42)  # Fixed seed for reproducibility
+        
+        for init_param, trained_param in zip(initial_weights, trained_weights):
+            # Compute delta (weight update)
+            delta = trained_param - init_param
+            
+            # Create a copy for noisy delta
+            noisy_delta = delta.copy()
+            
+            # Select random fraction of parameters to add noise to
+            total_params = delta.size
+            num_noisy_params = int(total_params * self.dp_noise_fraction)
+            
+            if num_noisy_params > 0:
+                # Flatten delta, add noise to random subset, then reshape
+                flat_delta = delta.flatten()
+                flat_noisy_delta = noisy_delta.flatten()
+                
+                # Randomly select indices to add noise to
+                noisy_indices = rng.choice(
+                    len(flat_delta), 
+                    size=num_noisy_params, 
+                    replace=False
+                )
+                
+                # Add Gaussian noise to selected parameters
+                noise = rng.normal(0, self.dp_noise_scale, size=num_noisy_params)
+                flat_noisy_delta[noisy_indices] += noise
+                
+                # Reshape back to original shape
+                noisy_delta = flat_noisy_delta.reshape(delta.shape)
+            
+            # Return initial weights + noisy delta
+            noisy_weights.append(init_param + noisy_delta)
+        
+        return noisy_weights
 
     def evaluate(self, parameters, config):
         self.set_parameters(parameters)
@@ -108,6 +169,10 @@ def client_fn(context: Context):
     lambda_pm = float(run_config.get("lambda-pm", 0.1))
     k = float(run_config.get("k", 1.0))
     feature_layer = run_config.get("feature-layer", "layer2")
+    
+    # DP noise parameters (default to 0.0 = disabled)
+    dp_noise_fraction = float(run_config.get("dp-noise-fraction", 0.0))
+    dp_noise_scale = float(run_config.get("dp-noise-scale", 0.01))
 
     trainloader, valloader, num_classes = load_data(
         partition_id,
@@ -130,6 +195,8 @@ def client_fn(context: Context):
         k,
         feature_layer,
         device,
+        dp_noise_fraction=dp_noise_fraction,
+        dp_noise_scale=dp_noise_scale,
     ).to_client()
 
 
