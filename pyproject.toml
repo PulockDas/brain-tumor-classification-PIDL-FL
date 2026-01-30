@@ -51,6 +51,9 @@ feature-layer = "layer2"
 num-shares = 3
 reconstruction-threshold = 2
 max-weight = 1048575
+# Differential Privacy (applied to weight deltas before encryption)
+dp-noise-fraction = 0.0
+dp-noise-scale = 0.01
 # Demo: if true, clients do not train (for quick protocol check)
 is-demo = false
 
