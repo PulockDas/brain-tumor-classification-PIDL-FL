@@ -174,15 +174,18 @@ def client_fn(context: Context):
     dp_noise_fraction = float(run_config.get("dp-noise-fraction", 0.0))
     dp_noise_scale = float(run_config.get("dp-noise-scale", 0.01))
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Enable pin_memory for faster GPU data transfer when GPU is available
+    pin_memory = torch.cuda.is_available()
+    
     trainloader, valloader, num_classes = load_data(
         partition_id,
         num_partitions,
         data_root,
         batch_size=batch_size,
-        num_workers=0,
-        pin_memory=False,
+        num_workers=0,  # 0 is safer for Colab/multiprocessing
+        pin_memory=pin_memory,
     )
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     return PIDLFlowerClient(
         trainloader,
