@@ -1,0 +1,21 @@
+{
+  "num-server-rounds": 10,
+  "min-fit-clients": 3,
+  "fraction-evaluate": 0.0,
+  "local-epochs": 5,
+  "learning-rate": 0.001,
+  "batch-size": 32,
+  "data-root": "/kaggle/input/lung-and-colon-cancer-histopathological-images/lung_colon_image_set/lung_image_sets",
+  "log-dir": "/content/results_lung/lung_cancer/3_clients",
+  "num-classes": 3,
+  "regularizer-type": "perona_malik",
+  "lambda-pm": 0.1,
+  "k": 1.0,
+  "feature-layer": "layer2",
+  "num-shares": 3,
+  "reconstruction-threshold": 2,
+  "max-weight": 1048575,
+  "dp-noise-fraction": 0.15,
+  "dp-noise-scale": 0.01,
+  "is-demo": false
+}
